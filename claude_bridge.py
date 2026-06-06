@@ -1,0 +1,146 @@
+# -*- coding: utf-8 -*-
+"""调 Claude Code headless (`claude -p`) 当大脑。用你的 CC 订阅，不需要 API key。
+- briefing(state, prev): 生成年度战略简报 (返回 dict)
+- chat(history, state, briefing): 跟用户聊天 (返回 str)
+prompt 通过 stdin 传，避开 Windows 命令行长度限制。
+"""
+import subprocess, shutil, json, os, re
+
+PERSONA = (
+    "你是欧陆风云4(EU4)的随身军师，陪一位玩家打单机普通局。"
+    "你拿到的是从存档解析出来的真实游戏数据。"
+    "你的风格：直接、实战、像个懂行的老玩家，不啰嗦，给可执行的具体建议"
+    "（点哪个科技、跟谁结盟、宣不宣战、怎么压AE、钱花哪），用中文。"
+    "不许编造数据里没有的数字。"
+)
+
+
+def _claude_bin():
+    for name in ("claude", "claude.cmd", "claude.exe"):
+        p = shutil.which(name)
+        if p:
+            return p
+    return None
+
+
+def _run_claude(prompt, timeout=180):
+    """跑 claude -p，返回 (text, error)。"""
+    binp = _claude_bin()
+    if not binp:
+        return None, "找不到 claude 命令。确认 Claude Code 已装且已登录 (`claude` 能在终端跑)。"
+    cmd = [binp, "-p", "--output-format", "json"]
+    try:
+        proc = subprocess.run(
+            cmd, input=prompt, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=timeout,
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+    except subprocess.TimeoutExpired:
+        return None, "Claude 响应超时。"
+    except Exception as e:
+        return None, f"调用 claude 失败: {e}"
+    if proc.returncode != 0:
+        return None, f"claude 退出码 {proc.returncode}: {(proc.stderr or '')[:400]}"
+    out = (proc.stdout or "").strip()
+    # --output-format json -> {"result": "...", "session_id": ...}
+    try:
+        obj = json.loads(out)
+        text = obj.get("result", out)
+    except json.JSONDecodeError:
+        text = out
+    return text, None
+
+
+def _extract_json(text):
+    if not text:
+        return None
+    m = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
+    raw = m.group(1) if m else None
+    if not raw:
+        a, b = text.find('{'), text.rfind('}')
+        raw = text[a:b + 1] if a != -1 and b > a else None
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+
+
+def _state_brief(state):
+    """把状态压成给 Claude 读的简短描述。"""
+    s = state
+    L = []
+    L.append(f"国家: {s.get('player_name')}  日期: {s.get('date')}")
+    p = s.get('power') or {}
+    L.append(f"治理点数 ADM/DIP/MIL: {p.get('adm')}/{p.get('dip')}/{p.get('mil')}")
+    L.append(f"国库: {s.get('treasury')}  贷款: {s.get('loans')}笔/欠{s.get('debt')}  通胀: {s.get('inflation')}")
+    L.append(f"稳定: {s.get('stability')}  威望: {s.get('prestige')}  正统: {s.get('legitimacy')}  "
+             f"厌战: {s.get('war_exhaustion')}  腐败: {s.get('corruption')}")
+    L.append(f"人力: {s.get('manpower')}/{s.get('max_manpower')}  陆军: {s.get('regiments')}团  海军: {s.get('ships')}船")
+    t, tm = s.get('tech') or {}, s.get('tech_max') or {}
+    L.append(f"科技 ADM/DIP/MIL: {t.get('adm')}/{t.get('dip')}/{t.get('mil')}  "
+             f"(全场最高 {tm.get('adm')}/{tm.get('dip')}/{tm.get('mil')})")
+    L.append(f"发展度: {s.get('development')}  省份: {s.get('num_cities')}")
+    if s.get('ideas'):
+        L.append("理念组: " + ", ".join(f"{k}:{v}" for k, v in s['ideas'].items()))
+    L.append(f"盟友: {s.get('allies') or '无'}")
+    L.append(f"我的宿敌: {s.get('my_rivals') or '无'}  把你当宿敌: {s.get('rivals_me') or '无'}")
+    if s.get('coalition'):
+        L.append(f"⚠️联盟围攻你: {s['coalition']}")
+    if s.get('wars'):
+        for w in s['wars']:
+            L.append(f"战争[{w['name']}] 我方{w['mine']} vs 敌方{w['enemy']}")
+    return "\n".join(L)
+
+
+def briefing(state, prev=None):
+    diff = ""
+    if prev:
+        diff = ("\n\n【去年同期数据，用于对比/复盘】\n" + _state_brief(prev))
+    prompt = f"""{PERSONA}
+
+下面是当前这一年的存档数据：
+
+{_state_brief(state)}{diff}
+
+请生成一张「年度战略简报」。只输出 JSON，不要别的文字，结构如下：
+{{
+  "headline": "一句话点出当前局势核心(15字内)",
+  "review": "对上一年的复盘评价(没有去年数据就写开局判断), 2-3句",
+  "situation": "当前局势判断(财政/军事/外交/扩张机会), 2-3句",
+  "goals": ["今年1-3个目标, 每条一句, 具体可量化"],
+  "watch": ["1-3条需要警惕的风险, 每条一句"],
+  "actions": ["3-6条今年具体该做的行动, 每条以动词开头, 很具体"]
+}}"""
+    text, err = _run_claude(prompt)
+    if err:
+        return {"error": err}
+    data = _extract_json(text)
+    if not data:
+        return {"error": "Claude 没返回有效 JSON", "raw": (text or "")[:500]}
+    return data
+
+
+def chat(history, state, brief=None):
+    """history: [{'role':'user'/'assistant','text':...}] 最近若干条。返回回复字符串。"""
+    hist_txt = "\n".join(
+        ("玩家: " if m['role'] == 'user' else "你: ") + m['text']
+        for m in history[-12:]
+    )
+    brief_txt = ""
+    if brief and not brief.get('error'):
+        brief_txt = "\n\n【你刚给出的年度简报】\n" + json.dumps(brief, ensure_ascii=False)
+    prompt = f"""{PERSONA}
+
+【当前游戏数据】
+{_state_brief(state)}{brief_txt}
+
+【对话记录】
+{hist_txt}
+
+接着上面对话，以军师身份回复玩家最后一句。直接给内容，不要前缀"你:"，简洁实战。"""
+    text, err = _run_claude(prompt)
+    if err:
+        return f"⚠️ {err}"
+    return (text or "").strip() or "（没拿到回复）"

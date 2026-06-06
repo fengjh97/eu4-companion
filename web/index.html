@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EU4 军师</title>
+<style>
+  :root{
+    --bg:#13110d; --panel:#1d1a13; --panel2:#26221a; --line:#3a3424;
+    --gold:#c9a227; --gold2:#e6c558; --parch:#e8dcc0; --ink:#cdbf9f;
+    --muted:#8a7d5f; --red:#c0573f; --green:#7ea36a; --blue:#6f93b0;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(1200px 500px at 70% -10%, #241f15 0%, transparent 60%),
+      var(--bg);
+    color:var(--parch);
+    font-family:"Hiragino Mincho ProN","Songti SC","Noto Serif CJK SC",Georgia,serif;
+    font-size:14px; display:flex; flex-direction:column; height:100vh; overflow:hidden;
+  }
+  /* 顶栏 */
+  header{
+    display:flex; align-items:baseline; gap:14px; padding:12px 18px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#221d14,#19150f);
+  }
+  header .crest{font-size:20px}
+  header h1{font-size:17px; margin:0; color:var(--gold2); letter-spacing:1px; font-weight:600}
+  header .date{margin-left:auto; color:var(--ink); font-variant-numeric:tabular-nums}
+  header .date b{color:var(--gold2); font-size:20px}
+  /* 数据条 */
+  .strip{display:flex; flex-wrap:wrap; gap:8px; padding:8px 16px; border-bottom:1px solid var(--line); background:#17140e}
+  .stat{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    padding:4px 10px; min-width:78px; line-height:1.25;
+  }
+  .stat .k{font-size:10px; color:var(--muted); letter-spacing:.5px}
+  .stat .v{font-size:14px; color:var(--parch); font-variant-numeric:tabular-nums; font-family:ui-monospace,Menlo,monospace}
+  .stat .v small{color:var(--muted)}
+  .warn{color:var(--red)!important} .good{color:var(--green)!important}
+  /* 主体 */
+  main{flex:1; display:flex; min-height:0}
+  .col-brief{width:42%; min-width:300px; overflow:auto; padding:16px; border-right:1px solid var(--line)}
+  .col-chat{flex:1; display:flex; flex-direction:column; min-width:0}
+  /* 简报卡 */
+  .card{
+    background:linear-gradient(180deg,#221d14,#1b170f);
+    border:1px solid var(--line); border-radius:10px; padding:0 0 8px; overflow:hidden;
+    box-shadow:0 6px 24px rgba(0,0,0,.4);
+  }
+  .card .headline{
+    padding:14px 16px; font-size:17px; color:#1a150c; font-weight:700;
+    background:linear-gradient(180deg,var(--gold2),var(--gold)); letter-spacing:.5px;
+  }
+  .sec{padding:12px 16px; border-top:1px solid var(--line)}
+  .sec h3{
+    margin:0 0 7px; font-size:12px; letter-spacing:2px; color:var(--gold);
+    text-transform:uppercase; font-weight:600;
+  }
+  .sec p{margin:0; color:var(--ink); line-height:1.65}
+  .sec ul{margin:0; padding-left:0; list-style:none}
+  .sec li{position:relative; padding:5px 0 5px 22px; color:var(--parch); line-height:1.5; border-bottom:1px dashed #2c2718}
+  .sec li:last-child{border-bottom:none}
+  .sec.goals li::before{content:"◆"; position:absolute; left:4px; color:var(--gold)}
+  .sec.watch li::before{content:"⚠"; position:absolute; left:2px}
+  .sec.actions li{padding-left:26px; cursor:pointer; transition:.15s}
+  .sec.actions li::before{content:"☐"; position:absolute; left:4px; color:var(--gold2); font-size:15px}
+  .sec.actions li.done{color:var(--muted); text-decoration:line-through}
+  .sec.actions li.done::before{content:"☑"; color:var(--green)}
+  .sec.actions li:hover{background:#221d12}
+  .empty{color:var(--muted); padding:30px 16px; text-align:center; line-height:1.8}
+  /* 聊天 */
+  .chatlog{flex:1; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:12px}
+  .msg{max-width:86%; padding:9px 13px; border-radius:10px; line-height:1.6; white-space:pre-wrap; word-break:break-word}
+  .msg.user{align-self:flex-end; background:#2c3a28; border:1px solid #3f5238; color:#dfe9d6}
+  .msg.assistant{align-self:flex-start; background:var(--panel2); border:1px solid var(--line); color:var(--parch)}
+  .msg.assistant::before{content:"⚜ 军师"; display:block; font-size:10px; color:var(--gold); letter-spacing:1px; margin-bottom:3px}
+  .msg.sys{align-self:center; background:transparent; color:var(--muted); font-size:12px; border:1px dashed var(--line)}
+  .typing{align-self:flex-start; color:var(--muted); font-size:12px; padding:4px 8px}
+  .inbar{display:flex; gap:8px; padding:12px 14px; border-top:1px solid var(--line); background:#17140e}
+  .inbar textarea{
+    flex:1; resize:none; height:42px; background:var(--panel); color:var(--parch);
+    border:1px solid var(--line); border-radius:8px; padding:10px 12px; font-family:inherit; font-size:14px;
+  }
+  .inbar textarea:focus{outline:none; border-color:var(--gold)}
+  .inbar button{
+    background:linear-gradient(180deg,var(--gold2),var(--gold)); color:#1a150c; border:none;
+    border-radius:8px; padding:0 18px; font-weight:700; cursor:pointer; font-family:inherit; letter-spacing:1px;
+  }
+  .inbar button:disabled{opacity:.4; cursor:default}
+  .dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--red); margin-right:6px; vertical-align:middle}
+  .dot.on{background:var(--green)}
+  /* 滚动条 */
+  ::-webkit-scrollbar{width:9px} ::-webkit-scrollbar-thumb{background:#332d1d; border-radius:5px}
+  ::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+<header>
+  <span class="crest">⚜</span>
+  <h1 id="country">EU4 军师</h1>
+  <span style="font-size:12px;color:var(--muted)"><span class="dot" id="conn"></span><span id="connlbl">连接中</span></span>
+  <span class="date"><span id="hl" style="font-size:12px;color:var(--muted);margin-right:10px"></span><b id="year">—</b> 年</span>
+</header>
+
+<div class="strip" id="strip"></div>
+
+<main>
+  <section class="col-brief">
+    <div id="brief"><div class="empty">⏳ 等待存档…<br><span style="font-size:12px">在游戏里存一次档（普通局 / 非铁人），<br>建议把自动存档设成「每年」。</span></div></div>
+  </section>
+  <section class="col-chat">
+    <div class="chatlog" id="log"></div>
+    <div class="inbar">
+      <textarea id="inp" placeholder="跟军师聊：现在该不该宣战？点哪个科技？要不要找盟友… (Enter 发送)"></textarea>
+      <button id="send">谏言</button>
+    </div>
+  </section>
+</main>
+
+<script>
+const $=s=>document.querySelector(s);
+let ws, thinkingEl=null;
+
+function setConn(on){ $('#conn').classList.toggle('on',on); $('#connlbl').textContent=on?'已连接':'断开'; }
+
+function fmt(n,d=0){ if(n===null||n===undefined||n==='') return '—';
+  let v=Number(n); if(isNaN(v)) return n;
+  return v.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+
+function statCard(k,v,cls=''){ return `<div class="stat"><div class="k">${k}</div><div class="v ${cls}">${v}</div></div>`; }
+
+function renderState(s){
+  if(!s||!s.ok){ $('#strip').innerHTML=''; return; }
+  $('#country').textContent='⚜ '+(s.player_name||'');
+  $('#year').textContent=s.year||'—';
+  const p=s.power||{}, t=s.tech||{}, tm=s.tech_max||{};
+  const gap=(a,b)=> (a==null||b==null)?'' : (b-a>=2?` <small class="warn">-${b-a}</small>`:(b-a>0?` <small>-${b-a}</small>`:''));
+  let h='';
+  h+=statCard('国库', fmt(s.treasury,0)+(s.loans? ` <small class="warn">/${s.loans}贷</small>`:''), s.treasury<0?'warn':'');
+  h+=statCard('ADM',p.adm??'—'); h+=statCard('DIP',p.dip??'—'); h+=statCard('MIL',p.mil??'—');
+  h+=statCard('人力', fmt(s.manpower,0), s.manpower<5000?'warn':'');
+  h+=statCard('陆/海', `${s.regiments??'—'}<small>团</small> ${s.ships||0}<small>船</small>`);
+  h+=statCard('科技 A/D/M', `${t.adm??'—'}${gap(t.adm,tm.adm)} ${t.dip??'—'}${gap(t.dip,tm.dip)} ${t.mil??'—'}${gap(t.mil,tm.mil)}`);
+  h+=statCard('发展度', fmt(s.development,0)+` <small>${s.num_cities||'—'}省</small>`);
+  h+=statCard('稳定', s.stability??'—', s.stability<0?'warn':(s.stability>=2?'good':''));
+  h+=statCard('厌战', s.war_exhaustion??'—', s.war_exhaustion>=5?'warn':'');
+  if(s.coalition&&s.coalition.length) h+=statCard('联盟围攻', s.coalition.length+'国','warn');
+  else if(s.rivals_me&&s.rivals_me.length) h+=statCard('视你为宿敌', s.rivals_me.length+'国', s.rivals_me.length>=3?'warn':'');
+  if(s.wars&&s.wars.length) h+=statCard('战争', s.wars.length+'场','warn');
+  $('#strip').innerHTML=h;
+}
+
+function renderBrief(b,s){
+  if(!b){ return; }
+  if(b.error){ $('#brief').innerHTML=`<div class="empty">⚠️ 简报生成失败：<br>${b.error}<br><span style="font-size:12px">${b.raw||''}</span></div>`; return; }
+  $('#hl').textContent=b.headline||'';
+  const list=(arr)=> (arr&&arr.length)? '<ul>'+arr.map(x=>`<li>${esc(x)}</li>`).join('')+'</ul>':'<p style="color:var(--muted)">—</p>';
+  let h='<div class="card">';
+  if(b.headline) h+=`<div class="headline">${esc(b.headline)}</div>`;
+  if(b.review) h+=`<div class="sec"><h3>上年复盘</h3><p>${esc(b.review)}</p></div>`;
+  if(b.situation) h+=`<div class="sec"><h3>局势</h3><p>${esc(b.situation)}</p></div>`;
+  h+=`<div class="sec goals"><h3>今年目标</h3>${list(b.goals)}</div>`;
+  h+=`<div class="sec watch"><h3>注意</h3>${list(b.watch)}</div>`;
+  h+=`<div class="sec actions"><h3>行动清单</h3>`+
+     ((b.actions&&b.actions.length)? '<ul>'+b.actions.map(x=>`<li onclick="this.classList.toggle('done')">${esc(x)}</li>`).join('')+'</ul>':'<p style="color:var(--muted)">—</p>')+`</div>`;
+  h+='</div>';
+  $('#brief').innerHTML=h;
+}
+
+function esc(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function addMsg(role,text){
+  const d=document.createElement('div');
+  d.className='msg '+(role==='user'?'user':role==='assistant'?'assistant':'sys');
+  d.textContent=text; $('#log').appendChild(d); $('#log').scrollTop=1e9;
+}
+function showThinking(on){
+  if(on){ if(thinkingEl) return; thinkingEl=document.createElement('div');
+    thinkingEl.className='typing'; thinkingEl.textContent='⚜ 军师斟酌中…'; $('#log').appendChild(thinkingEl); $('#log').scrollTop=1e9;
+  } else if(thinkingEl){ thinkingEl.remove(); thinkingEl=null; }
+}
+
+function connect(){
+  ws=new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen=()=>setConn(true);
+  ws.onclose=()=>{ setConn(false); setTimeout(connect,1500); };
+  ws.onmessage=ev=>{
+    const m=JSON.parse(ev.data);
+    if(m.kind==='snapshot'){
+      if(m.state) renderState(m.state);
+      if(m.briefing) renderBrief(m.briefing,m.state);
+      if(m.history){ $('#log').innerHTML=''; m.history.forEach(x=>addMsg(x.role,x.text)); }
+    } else if(m.kind==='state'){ renderState(m.state); }
+    else if(m.kind==='briefing'){ showThinking(false); renderBrief(m.briefing,m.state); }
+    else if(m.kind==='chat'){ showThinking(false); addMsg(m.role,m.text); }
+    else if(m.kind==='thinking'){ showThinking(true); }
+    else if(m.kind==='toast'){ addMsg('sys',m.text); }
+    else if(m.kind==='error'){ addMsg('sys','⚠️ '+m.text); }
+  };
+}
+function send(){
+  const v=$('#inp').value.trim(); if(!v||!ws||ws.readyState!==1) return;
+  ws.send(JSON.stringify({action:'chat',text:v})); $('#inp').value='';
+}
+$('#send').onclick=send;
+$('#inp').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); }});
+connect();
+</script>
+</body>
+</html>
