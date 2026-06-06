@@ -20,12 +20,22 @@ run.bat
 `run.bat` 会起后端 + 用 Chrome 开一个干净的 app 小窗口。
 想置顶贴在游戏上：游戏开「无边框窗口化」，再右键 `pin_topmost.ps1` → 用 PowerShell 运行。
 
-## ⚠️ 第一次先校准字段
-不同 EU4 版本字段名可能略有出入。先跑一次：
+## 面板给你哪些数据
+- **治理点数** ADM/DIP/MIL、国库/贷款/通胀
+- **财政构成**：月收入/支出/净结余，收入来源拆分（税收/生产/贸易/藩属…）、主要支出拆分（来自 `ledger` 月度表，按 rakaly 的索引→类别映射解码）
+- **排名**：发展度排名、大国分及排名、是否列强
+- 稳定/威望/正统/厌战/腐败/专制度
+- 人力/水手、陆军团数/海军船数、陆海传统、力量投射
+- 科技 ADM/DIP/MIL 及与全场最高的差距
+- 理念组、附庸/属国、盟友、宿敌、谁把你当宿敌、联盟围攻预警、进行中的战争双方
+
+字段名对照 [rakaly/eu4save](https://github.com/rakaly/eu4save) 源码硬编码（`powers`/`treasury`/`manpower`/`ledger.lastmonthincometable` 等），一般不用手动校准。
+
+## 万一某项显示「—」
+说明你这版 EU4 某字段名不一样。跑一次把字段名发我对一下即可：
 ```bat
 python eu4_parser.py --keys
 ```
-把输出整段发回给 Claude（我），对一遍真实字段名，把对不上的（比如 powers/treasury/manpower）修一下，再正式用。
 
 ## 文件
 - `eu4_parser.py` — 存档解析 + 状态抽取（零依赖）

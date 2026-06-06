@@ -75,13 +75,26 @@ def _state_brief(state):
     p = s.get('power') or {}
     L.append(f"治理点数 ADM/DIP/MIL: {p.get('adm')}/{p.get('dip')}/{p.get('mil')}")
     L.append(f"国库: {s.get('treasury')}  贷款: {s.get('loans')}笔/欠{s.get('debt')}  通胀: {s.get('inflation')}")
+    econ = s.get('economy') or {}
+    if econ:
+        line = f"月收支: 收入 {econ.get('income')} / 支出 {econ.get('expense')} / 净 {econ.get('net')}"
+        if econ.get('income_top'):
+            line += "  收入来源: " + ", ".join(f"{n}{v}" for n, v in econ['income_top'][:4])
+        L.append(line)
+        if econ.get('expense_top'):
+            L.append("主要支出: " + ", ".join(f"{n}{v}" for n, v in econ['expense_top'][:4]))
     L.append(f"稳定: {s.get('stability')}  威望: {s.get('prestige')}  正统: {s.get('legitimacy')}  "
-             f"厌战: {s.get('war_exhaustion')}  腐败: {s.get('corruption')}")
-    L.append(f"人力: {s.get('manpower')}/{s.get('max_manpower')}  陆军: {s.get('regiments')}团  海军: {s.get('ships')}船")
+             f"厌战: {s.get('war_exhaustion')}  腐败: {s.get('corruption')}  专制: {s.get('absolutism')}")
+    L.append(f"人力: {s.get('manpower')}/{s.get('max_manpower')}  水手: {s.get('sailors')}/{s.get('max_sailors')}  "
+             f"陆军: {s.get('regiments')}团  海军: {s.get('ships')}船  陆/海传统: {s.get('army_tradition')}/{s.get('navy_tradition')}")
     t, tm = s.get('tech') or {}, s.get('tech_max') or {}
     L.append(f"科技 ADM/DIP/MIL: {t.get('adm')}/{t.get('dip')}/{t.get('mil')}  "
              f"(全场最高 {tm.get('adm')}/{tm.get('dip')}/{tm.get('mil')})")
-    L.append(f"发展度: {s.get('development')}  省份: {s.get('num_cities')}")
+    r = s.get('rank') or {}
+    L.append(f"发展度: {s.get('development')} (排名 {r.get('dev_rank')}/{r.get('total')})  "
+             f"省份: {s.get('num_cities')}  大国分: {r.get('gp_score')}(排名 {r.get('gp_rank')})  力量投射: {s.get('power_projection')}")
+    if s.get('subjects'):
+        L.append(f"附庸/属国: {s['subjects']}")
     if s.get('ideas'):
         L.append("理念组: " + ", ".join(f"{k}:{v}" for k, v in s['ideas'].items()))
     L.append(f"盟友: {s.get('allies') or '无'}")

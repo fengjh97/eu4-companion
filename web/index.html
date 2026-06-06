@@ -138,13 +138,18 @@ function renderState(s){
   $('#year').textContent=s.year||'—';
   const p=s.power||{}, t=s.tech||{}, tm=s.tech_max||{};
   const gap=(a,b)=> (a==null||b==null)?'' : (b-a>=2?` <small class="warn">-${b-a}</small>`:(b-a>0?` <small>-${b-a}</small>`:''));
+  const e=s.economy||{}, r=s.rank||{};
   let h='';
   h+=statCard('国库', fmt(s.treasury,0)+(s.loans? ` <small class="warn">/${s.loans}贷</small>`:''), s.treasury<0?'warn':'');
+  if(e.net!==undefined) h+=statCard('月净结余', (e.net>=0?'+':'')+fmt(e.net,1), e.net<0?'warn':'good');
+  if(e.income_top&&e.income_top.length) h+=statCard('主收入', `${e.income_top[0][0]} <small>${fmt(e.income_top[0][1],0)}</small>`);
   h+=statCard('ADM',p.adm??'—'); h+=statCard('DIP',p.dip??'—'); h+=statCard('MIL',p.mil??'—');
   h+=statCard('人力', fmt(s.manpower,0), s.manpower<5000?'warn':'');
   h+=statCard('陆/海', `${s.regiments??'—'}<small>团</small> ${s.ships||0}<small>船</small>`);
   h+=statCard('科技 A/D/M', `${t.adm??'—'}${gap(t.adm,tm.adm)} ${t.dip??'—'}${gap(t.dip,tm.dip)} ${t.mil??'—'}${gap(t.mil,tm.mil)}`);
   h+=statCard('发展度', fmt(s.development,0)+` <small>${s.num_cities||'—'}省</small>`);
+  if(r.dev_rank) h+=statCard('排名', `#${r.dev_rank}<small>/${r.total}</small>`+(r.is_gp?' <small class="good">列强</small>':''));
+  if(s.absolutism) h+=statCard('专制', fmt(s.absolutism,0));
   h+=statCard('稳定', s.stability??'—', s.stability<0?'warn':(s.stability>=2?'good':''));
   h+=statCard('厌战', s.war_exhaustion??'—', s.war_exhaustion>=5?'warn':'');
   if(s.coalition&&s.coalition.length) h+=statCard('联盟围攻', s.coalition.length+'国','warn');
