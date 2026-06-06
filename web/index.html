@@ -71,6 +71,29 @@
   .sec.actions li.done::before{content:"☑"; color:var(--green)}
   .sec.actions li:hover{background:#221d12}
   .empty{color:var(--muted); padding:30px 16px; text-align:center; line-height:1.8}
+  /* 深度分析 */
+  .briefbar{display:flex; align-items:center; gap:8px; margin-bottom:10px}
+  .briefbar .t{font-size:12px; letter-spacing:2px; color:var(--muted)}
+  .briefbar button{margin-left:auto; background:#2a2417; color:var(--gold2); border:1px solid var(--line);
+    border-radius:6px; padding:4px 12px; cursor:pointer; font-family:inherit; font-size:12px; letter-spacing:1px}
+  .briefbar button:hover{border-color:var(--gold)}
+  .deep{margin-top:14px}
+  .deep .verdict{background:linear-gradient(180deg,#2a2113,#221b10); border:1px solid var(--gold);
+    border-radius:8px; padding:11px 14px; color:var(--gold2); line-height:1.6; margin-bottom:10px}
+  .deep .verdict::before{content:"⚔ 定论  "; color:var(--gold); font-size:11px; letter-spacing:1px}
+  .deep details{background:var(--panel); border:1px solid var(--line); border-radius:8px; margin-bottom:7px; overflow:hidden}
+  .deep summary{padding:9px 13px; cursor:pointer; color:var(--gold); font-size:13px; letter-spacing:1px;
+    list-style:none; user-select:none; transition:.15s}
+  .deep summary::-webkit-details-marker{display:none}
+  .deep summary:hover{background:#221d12}
+  .deep summary::before{content:"▸ "; color:var(--muted)}
+  .deep details[open] summary::before{content:"▾ "}
+  .deep .body{padding:2px 14px 12px; color:var(--ink); line-height:1.7}
+  .deep .body ul{margin:0; padding-left:0; list-style:none}
+  .deep .body li{position:relative; padding:5px 0 5px 20px; color:var(--parch); border-bottom:1px dashed #2c2718}
+  .deep .body li:last-child{border-bottom:none}
+  .deep .body li::before{content:"▸"; position:absolute; left:2px; color:var(--gold)}
+  .deepwait{color:var(--muted); font-size:12px; padding:8px 2px}
   /* 聊天 */
   .chatlog{flex:1; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:12px}
   .msg{max-width:86%; padding:9px 13px; border-radius:10px; line-height:1.6; white-space:pre-wrap; word-break:break-word}
@@ -109,7 +132,9 @@
 
 <main>
   <section class="col-brief">
+    <div class="briefbar"><span class="t">战略简报</span><button id="deepbtn">🔍 深挖一层</button></div>
     <div id="brief"><div class="empty">⏳ 等待存档…<br><span style="font-size:12px">在游戏里存一次档（普通局 / 非铁人），<br>建议把自动存档设成「每年」。</span></div></div>
+    <div id="deep"></div>
   </section>
   <section class="col-chat">
     <div class="chatlog" id="log"></div>
@@ -175,6 +200,24 @@ function renderBrief(b,s){
   $('#brief').innerHTML=h;
 }
 
+function renderDeep(d){
+  if(!d){ return; }
+  if(d.error){ $('#deep').innerHTML=`<div class="deepwait">⚠️ 深度分析失败：${d.error}</div>`; return; }
+  const sec=(open,icon,title,txt)=> txt? `<details ${open?'open':''}><summary>${icon} ${title}</summary><div class="body">${esc(txt)}</div></details>`:'';
+  let h='<div class="deep">';
+  if(d.verdict) h+=`<div class="verdict">${esc(d.verdict)}</div>`;
+  h+=sec(true,'📈','趋势走向',d.trend);
+  h+=sec(false,'💰','财政诊断',d.economy);
+  h+=sec(false,'⚔️','军力评估',d.military);
+  h+=sec(false,'🤝','外交威胁',d.diplomacy);
+  h+=sec(false,'🗡','扩张规划',d.expansion);
+  if(d.plan&&d.plan.length){
+    h+=`<details><summary>🗺 5-10年路线</summary><div class="body"><ul>`+d.plan.map(x=>`<li>${esc(x)}</li>`).join('')+`</ul></div></details>`;
+  }
+  h+='</div>';
+  $('#deep').innerHTML=h;
+}
+
 function esc(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
 function addMsg(role,text){
@@ -197,9 +240,12 @@ function connect(){
     if(m.kind==='snapshot'){
       if(m.state) renderState(m.state);
       if(m.briefing) renderBrief(m.briefing,m.state);
+      if(m.deep) renderDeep(m.deep);
       if(m.history){ $('#log').innerHTML=''; m.history.forEach(x=>addMsg(x.role,x.text)); }
     } else if(m.kind==='state'){ renderState(m.state); }
     else if(m.kind==='briefing'){ showThinking(false); renderBrief(m.briefing,m.state); }
+    else if(m.kind==='deep'){ renderDeep(m.deep); }
+    else if(m.kind==='deep_thinking'){ $('#deep').innerHTML='<div class="deepwait">🔍 军师正在深挖（趋势·财政·军事·外交·扩张）…</div>'; }
     else if(m.kind==='chat'){ showThinking(false); addMsg(m.role,m.text); }
     else if(m.kind==='thinking'){ showThinking(true); }
     else if(m.kind==='toast'){ addMsg('sys',m.text); }
@@ -212,6 +258,7 @@ function send(){
 }
 $('#send').onclick=send;
 $('#inp').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); }});
+$('#deepbtn').onclick=()=>{ if(ws&&ws.readyState===1){ $('#deep').innerHTML='<div class="deepwait">🔍 军师正在深挖…</div>'; ws.send(JSON.stringify({action:'deepen'})); }};
 connect();
 </script>
 </body>

@@ -25,6 +25,8 @@ STATE = {
     "state": None,       # 当前抽取的状态
     "prev_state": None,  # 上一年状态(复盘用)
     "briefing": None,    # 当前年度简报
+    "deep": None,        # 当前深度分析
+    "timeline": [],      # 历年快照 [snapshot(...)]
     "history": [],       # 聊天记录 [{'role','text'}]
 }
 CLIENTS = set()
@@ -44,28 +46,49 @@ async def broadcast(msg):
 
 def snapshot_msg():
     return {"kind": "snapshot", "state": STATE["state"], "briefing": STATE["briefing"],
+            "deep": STATE["deep"], "timeline": STATE["timeline"],
             "history": STATE["history"], "save_dir": SAVE_DIR}
 
 
 async def process_save(path):
-    """解析存档 + 生成简报，更新共享状态并广播。"""
+    """解析存档 + 生成简报 + 深度分析(并行)，更新共享状态并广播。"""
     try:
         top = await asyncio.to_thread(P.parse_save, path)
         new_state = P.extract_state(top)
     except Exception as e:
         await broadcast({"kind": "error", "text": f"解析失败: {e}"})
         return
+    year = new_state.get("year")
     async with LOCK:
         STATE["prev_state"] = STATE["state"]
         STATE["state"] = new_state
-        year = new_state.get("year")
-        await broadcast({"kind": "state", "state": new_state})
-        await broadcast({"kind": "toast", "text": f"📅 {year} 年存档已读取，正在生成战略简报…"})
-    # 让 Claude 生成简报(慢, 放线程池)
-    brief = await asyncio.to_thread(CB.briefing, new_state, STATE["prev_state"])
-    async with LOCK:
-        STATE["briefing"] = brief
-    await broadcast({"kind": "briefing", "briefing": brief, "state": new_state})
+        # 时间线: 同年重存就替换最后一条
+        snap = CB.snapshot(new_state)
+        tl = STATE["timeline"]
+        if tl and tl[-1].get("year") == year:
+            tl[-1] = snap
+        else:
+            tl.append(snap)
+        STATE["timeline"] = tl[-60:]
+        timeline = list(STATE["timeline"])
+        prev = STATE["prev_state"]
+    await broadcast({"kind": "state", "state": new_state})
+    await broadcast({"kind": "toast", "text": f"📅 {year} 年存档已读取，军师正在快报 + 深度分析…"})
+
+    async def gen_brief():
+        b = await asyncio.to_thread(CB.briefing, new_state, prev)
+        async with LOCK:
+            STATE["briefing"] = b
+        await broadcast({"kind": "briefing", "briefing": b, "state": new_state})
+
+    async def gen_deep():
+        d = await asyncio.to_thread(CB.deep_analysis, new_state, timeline)
+        async with LOCK:
+            STATE["deep"] = d
+        await broadcast({"kind": "deep", "deep": d})
+
+    # 并行跑两个 claude，墙钟≈一次
+    await asyncio.gather(gen_brief(), gen_deep())
 
 
 async def watcher():
@@ -134,6 +157,13 @@ async def ws_endpoint(ws: WebSocket):
             elif msg.get("action") == "reanalyze":
                 if STATE["save_path"]:
                     await process_save(STATE["save_path"])
+            elif msg.get("action") == "deepen":
+                if STATE["state"]:
+                    await broadcast({"kind": "deep_thinking"})
+                    d = await asyncio.to_thread(CB.deep_analysis, STATE["state"], list(STATE["timeline"]))
+                    async with LOCK:
+                        STATE["deep"] = d
+                    await broadcast({"kind": "deep", "deep": d})
     except WebSocketDisconnect:
         pass
     finally:

@@ -135,6 +135,61 @@ def briefing(state, prev=None):
     return data
 
 
+def snapshot(state):
+    """压成时间线一行(存历史用), 给趋势分析。"""
+    e = state.get('economy') or {}
+    r = state.get('rank') or {}
+    t = state.get('tech') or {}
+    return {
+        'year': state.get('year'),
+        'net': e.get('net'), 'income': e.get('income'),
+        'treasury': round(state.get('treasury') or 0),
+        'dev': state.get('development'), 'dev_rank': r.get('dev_rank'),
+        'gp': r.get('gp_score'),
+        'tech': (t.get('adm') or 0) + (t.get('dip') or 0) + (t.get('mil') or 0),
+        'mp': state.get('manpower'), 'reg': state.get('regiments'),
+    }
+
+
+def _trend_text(timeline):
+    if not timeline:
+        return "(本局暂无历史数据，这是第一次分析)"
+    rows = ["年份 | 净收 | 国库 | 发展度(名次) | 科技和 | 人力 | 陆军"]
+    for s in timeline[-10:]:
+        rows.append(f"{s.get('year')} | {s.get('net')} | {s.get('treasury')} | "
+                    f"{s.get('dev')}(#{s.get('dev_rank')}) | {s.get('tech')} | {s.get('mp')} | {s.get('reg')}")
+    return "\n".join(rows)
+
+
+def deep_analysis(state, timeline=None):
+    """更深入的多维分析(带趋势)，返回结构化 dict 给前端展开。"""
+    prompt = f"""{PERSONA}
+
+【当前数据】
+{_state_brief(state)}
+
+【历年走势(本局存档时间线)】
+{_trend_text(timeline)}
+
+请做一份**深度战略分析**，比快报更狠、更有推理和数字。只输出 JSON，结构如下：
+{{
+  "trend": "结合上面时间线，判断走向：收入/发展度/科技/排名是在拉开还是被反超？增速如何？2-4句，带具体数字。",
+  "economy": "财政深度诊断：收入结构健不健康、靠什么吃饭、钱该砸哪(发展度/建筑/军队/还贷)、有没有隐患。带数字推理，3-4句。",
+  "military": "军力评估：团数/科技/传统 vs 周边，战备如何，能不能打、打谁有把握。3-4句。",
+  "diplomacy": "外交与威胁：联盟/AE 的数学账、谁最危险、该拉谁抱谁大腿。3-4句。",
+  "expansion": "下一步扩张规划：具体打谁、用什么 CB、优先吃哪些方向的省，为什么。3-4句。",
+  "plan": ["未来5-10年分阶段路线，3-5条，每条一句带阶段和目标"],
+  "verdict": "一句话总评 + 此刻最该做的那一件事"
+}}"""
+    text, err = _run_claude(prompt)
+    if err:
+        return {"error": err}
+    data = _extract_json(text)
+    if not data:
+        return {"error": "深度分析没返回有效 JSON", "raw": (text or "")[:500]}
+    return data
+
+
 def chat(history, state, brief=None):
     """history: [{'role':'user'/'assistant','text':...}] 最近若干条。返回回复字符串。"""
     hist_txt = "\n".join(
