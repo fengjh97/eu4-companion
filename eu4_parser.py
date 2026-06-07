@@ -132,20 +132,31 @@ def parse_clausewitz(text):
     return d
 
 
+def _decode_member(raw):
+    if raw[:6] == b'EU4bin':
+        raise RuntimeError("铁人/二进制存档(EU4bin)读不了，需先用 rakaly melt 转明文，或关掉铁人模式。")
+    text = raw.decode('cp1252', errors='replace')
+    return text[6:] if text.startswith('EU4txt') else text
+
+
 def load_gamestate_text(path):
     with open(path, 'rb') as f:
         head = f.read(2)
     if head == b'PK':
+        # zip 压缩存档: meta(头部, 含 date/player) + gamestate(主体) + ai。
+        # 合并 meta+gamestate, 否则 date 在 meta 里读不到(时间线日期会是 ?)。
         with zipfile.ZipFile(path) as z:
-            names = z.namelist()
-            member = 'gamestate' if 'gamestate' in names else names[0]
-            raw = z.read(member)
-    else:
-        with open(path, 'rb') as f:
-            raw = f.read()
-    if raw[:6] == b'EU4bin':
-        raise RuntimeError("铁人/二进制存档(EU4bin)读不了，需先用 rakaly melt 转明文，或关掉铁人模式。")
-    return raw.decode('cp1252', errors='replace')
+            names = set(z.namelist())
+            parts = []
+            for m in ('meta', 'gamestate'):
+                if m in names:
+                    parts.append(_decode_member(z.read(m)))
+            if not parts:  # 兜底: 没有标准成员名就取第一个
+                parts.append(_decode_member(z.read(z.namelist()[0])))
+            return "\n".join(parts)
+    with open(path, 'rb') as f:
+        raw = f.read()
+    return _decode_member(raw)
 
 
 def parse_save(path):
@@ -201,9 +212,12 @@ TAGS = {
 
 
 # ledger 收入/支出表是按索引排的数组 (来自 rakaly/eu4save query.rs)
+# 注: index 9 是「借款」(本月新借款入账, 一次性), 不是利息收入。利息是支出(见 EXPENSE 1)。
 INCOME_CATS = ['税收', '生产', '贸易', '金币', '关税', '藩属', '港口费', '补贴', '战争赔款',
-               '利息', '馈赠', '事件', '战利品', '宝船队', '虹吸', '雇佣金', '知识共享',
+               '借款', '馈赠', '事件', '战利品', '宝船队', '虹吸', '雇佣金', '知识共享',
                '封锁港口', '劫掠城市', '其他']
+# 一次性/非经常性收入类别, 算「经常性月收入」时剔除, 否则军师会误判财政
+ONE_OFF_INCOME = {'借款', '战利品', '劫掠城市', '战争赔款', '封锁港口'}
 EXPENSE_CATS = {0: '顾问维护', 1: '利息', 2: '建省维护', 4: '补贴', 5: '战争赔款', 6: '陆军维护',
                 7: '海军维护', 8: '要塞维护', 9: '殖民', 10: '传教', 11: '征兵', 12: '造船',
                 13: '建要塞', 14: '建筑', 16: '还贷', 17: '馈赠', 18: '顾问', 19: '事件',
@@ -337,19 +351,25 @@ def extract_state(top):
     exp_table = gv(ledger, 'lastmonthexpensetable')
     inc_bd = _breakdown(inc_table, INCOME_CATS)
     exp_bd = _breakdown(exp_table, EXPENSE_CATS)
+    # 剔除一次性收入(借款/战利品等), 经常性收入才反映可持续财政
+    one_off = round(sum(v for n, v in inc_bd if n in ONE_OFF_INCOME), 2)
+    recurring_bd = [[n, v] for n, v in inc_bd if n not in ONE_OFF_INCOME]
     monthly_income = num(gv(ledger, 'lastmonthincome'))
     if monthly_income is None and inc_bd:
         monthly_income = sum(v for _, v in inc_bd)
+    recurring = round((monthly_income - one_off), 2) if monthly_income is not None else None
     monthly_expense = sum(v for _, v in exp_bd) if exp_bd else None
     econ = {}
-    if monthly_income is not None:
-        econ['income'] = round(monthly_income, 2)
+    if recurring is not None:
+        econ['income'] = recurring                       # 经常性月收入(剔除借款等)
+    if one_off > 0.001:
+        econ['one_off_income'] = one_off                 # 本月一次性入账(借款/战利品)
     if monthly_expense is not None:
         econ['expense'] = round(monthly_expense, 2)
-    if monthly_income is not None and monthly_expense is not None:
-        econ['net'] = round(monthly_income - monthly_expense, 2)
-    if inc_bd:
-        econ['income_top'] = inc_bd[:5]
+    if recurring is not None and monthly_expense is not None:
+        econ['net'] = round(recurring - monthly_expense, 2)   # 真实可持续月结余
+    if recurring_bd:
+        econ['income_top'] = recurring_bd[:5]
     if exp_bd:
         econ['expense_top'] = exp_bd[:5]
     st['economy'] = econ

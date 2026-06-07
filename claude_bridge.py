@@ -77,9 +77,11 @@ def _state_brief(state):
     L.append(f"国库: {s.get('treasury')}  贷款: {s.get('loans')}笔/欠{s.get('debt')}  通胀: {s.get('inflation')}")
     econ = s.get('economy') or {}
     if econ:
-        line = f"月收支: 收入 {econ.get('income')} / 支出 {econ.get('expense')} / 净 {econ.get('net')}"
+        line = f"月收支(经常性): 收入 {econ.get('income')} / 支出 {econ.get('expense')} / 净 {econ.get('net')}"
+        if econ.get('one_off_income'):
+            line += f"  [本月另有一次性入账{econ['one_off_income']}(借款/战利品等,不可持续)]"
         if econ.get('income_top'):
-            line += "  收入来源: " + ", ".join(f"{n}{v}" for n, v in econ['income_top'][:4])
+            line += "  经常性收入来源: " + ", ".join(f"{n}{v}" for n, v in econ['income_top'][:4])
         L.append(line)
         if econ.get('expense_top'):
             L.append("主要支出: " + ", ".join(f"{n}{v}" for n, v in econ['expense_top'][:4]))

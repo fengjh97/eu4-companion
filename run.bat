@@ -1,6 +1,11 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
+
+REM 日文/中文 Windows 控制台默认 cp932，Python 打印中文会崩 —— 强制 UTF-8
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
+
 echo ============================================
 echo   EU4 陪玩军师  启动中...
 echo ============================================
