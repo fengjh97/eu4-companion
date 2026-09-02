@@ -8,7 +8,7 @@ EU4 存档(.eu4) ──watch──▶ Python后端 ──解析──▶ 状态J
 
 ## 前提（Windows）
 - Python（你的 miniconda 就行）
-- Claude Code 已安装并登录：终端能跑 `claude` 且 `claude -p "hi"` 有回应
+- Claude Code **v2.1.248+** 已安装并登录：终端能跑 `claude` 且 `claude -p "hi"` 有回应（`--restricted` 需要 v2.1.248+）
 - 普通局、**非铁人(Ironman)**。建议游戏设置里把自动存档设成「每年」
 
 ## 安装 & 跑
@@ -19,6 +19,10 @@ run.bat
 ```
 `run.bat` 会起后端 + 用 Chrome 开一个干净的 app 小窗口。
 想置顶贴在游戏上：游戏开「无边框窗口化」，再右键 `pin_topmost.ps1` → 用 PowerShell 运行。
+
+## Claude Code 安全边界
+`claude_bridge.py` 只把 Claude Code 当作无工具、单轮的文本推理器使用：以 `--restricted --tools "" --disallowedTools "*" --no-session-persistence --max-turns 1` 启动。这样由本项目触发的 Claude 会话不会读取用户/项目级 Claude Code 设置，不能调用本地文件、命令、WebFetch 或 MCP 工具，并且不会把会话持久化到磁盘。
+这些调用仍然会正常消耗你的 Claude Code 订阅额度。
 
 ## 面板给你哪些数据
 - **治理点数** ADM/DIP/MIL、国库/贷款/通胀
