@@ -28,7 +28,18 @@ def _run_claude(prompt, timeout=180):
     binp = _claude_bin()
     if not binp:
         return None, "找不到 claude 命令。确认 Claude Code 已装且已登录 (`claude` 能在终端跑)。"
-    cmd = [binp, "-p", "--output-format", "json"]
+    # EU4 Companion only needs Claude as a text-in/text-out reasoning engine.
+    # Keep unattended calls isolated from local tools, MCPs, settings, and sessions.
+    cmd = [
+        binp,
+        "--restricted",
+        "-p",
+        "--tools", "",
+        "--disallowedTools", "*",
+        "--no-session-persistence",
+        "--max-turns", "1",
+        "--output-format", "json",
+    ]
     try:
         proc = subprocess.run(
             cmd, input=prompt, capture_output=True, text=True,
